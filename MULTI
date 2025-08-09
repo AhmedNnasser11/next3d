@@ -1,0 +1,56 @@
+import React from 'react';
+import { useTexture } from '@react-three/drei';
+
+const Walls: React.FC = () => {
+  const wallTex = useTexture("/images/wall-test.png");
+  // ** rest of code here **
+  return (
+    <mesh>
+      <boxBufferGeometry attach="geometry" args={[10, 5, 1]} />
+      <meshStandardMaterial attach="material" map={wallTex} />
+    </mesh>
+  );
+};
+
+export default Walls;
+
+// components/three/scene/floor.tsx
+import React from 'react';
+import { useTexture } from '@react-three/drei';
+
+const Floor: React.FC = () => {
+  const texture = useTexture("/images/floor-wood.png");
+  // ** rest of code here **
+  return (
+    <mesh>
+      <planeBufferGeometry attach="geometry" args={[10, 10]} />
+      <meshStandardMaterial attach="material" map={texture} />
+    </mesh>
+  );
+};
+
+export default Floor;
+
+// components/three/scene/placed-item.tsx
+import React from 'react';
+import { useTexture } from '@react-three/drei';
+
+const PlacedItem: React.FC = () => {
+  const wallTex = useTexture("/images/wall-test.png");
+  const floorTex = useTexture("/images/floor-wood.png");
+  // ** rest of code here **
+  return (
+    <group>
+      <mesh position={[0, 2.5, 0]}>
+        <boxBufferGeometry attach="geometry" args={[1, 5, 1]} />
+        <meshStandardMaterial attach="material" map={wallTex} />
+      </mesh>
+      <mesh position={[0, 0, 0]}>
+        <planeBufferGeometry attach="geometry" args={[1, 1]} />
+        <meshStandardMaterial attach="material" map={floorTex} />
+      </mesh>
+    </group>
+  );
+};
+
+export default PlacedItem;
