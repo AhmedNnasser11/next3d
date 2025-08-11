@@ -23,7 +23,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
-      <SidebarHeader />
+      <SidebarHeader className="py-4">
+        <h1 className="text-lg font-bold text-center">Blueprint 3D</h1>
+      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Modes</SidebarGroupLabel>
@@ -34,8 +36,9 @@ export function AppSidebar() {
                   isActive={tab === "floorplan"}
                   onClick={() => setTab("floorplan")}
                   tooltip="Edit Floorplan"
+                  className={tab === "floorplan" ? "bg-primary text-primary-foreground" : ""}
                 >
-                  <Ruler />
+                  <Ruler className="h-4 w-4" />
                   <span>{"Edit Floorplan"}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -44,8 +47,9 @@ export function AppSidebar() {
                   isActive={tab === "design"}
                   onClick={() => setTab("design")}
                   tooltip="Design"
+                  className={tab === "design" ? "bg-primary text-primary-foreground" : ""}
                 >
-                  <Cube />
+                  <Cube className="h-4 w-4" />
                   <span>{"Design"}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -54,8 +58,9 @@ export function AppSidebar() {
                   isActive={tab === "shop"}
                   onClick={() => setTab("shop")}
                   tooltip="Add Items"
+                  className={tab === "shop" ? "bg-primary text-primary-foreground" : ""}
                 >
-                  <ShoppingCart />
+                  <ShoppingCart className="h-4 w-4" />
                   <span>{"Add Items"}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useGLTF } from "@react-three/drei"
 import * as THREE from "three"
 
@@ -17,9 +17,11 @@ type Props = {
  * - Applies optional rotationOffsetY to match your model's forward direction with +Z
  */
 export function GLTFModel({ url, rotationOffsetY = 0, onBounds }: Props) {
-  const { scene } = useGLTF(url)
+  const { scene, progress } = useGLTF(url)
+  const [isLoading, setIsLoading] = useState(true)
 
   const clone = useMemo(() => {
+    if (!scene) return null
     const s = scene.clone(true)
     // ensure all meshes cast/receive shadows
     s.traverse((o) => {
@@ -34,10 +36,12 @@ export function GLTFModel({ url, rotationOffsetY = 0, onBounds }: Props) {
         }
       }
     })
+    setIsLoading(false)
     return s
   }, [scene])
 
   useEffect(() => {
+    if (!clone) return
     // compute local bounds
     const box = new THREE.Box3().setFromObject(clone)
     const size = new THREE.Vector3()
@@ -49,10 +53,21 @@ export function GLTFModel({ url, rotationOffsetY = 0, onBounds }: Props) {
 
   return (
     <group rotation-y={rotationOffsetY}>
-      <primitive object={clone} />
+      {isLoading && (
+        <mesh>
+          <boxGeometry args={[2, 2, 2]} />
+          <meshStandardMaterial color="#000" wireframe={true} />
+        </mesh>
+      )}
+      {clone && <primitive object={clone} />}
     </group>
   )
 }
 
-// Preload built-in sample to avoid jank
-useGLTF.preload("/assets/3d/duck.glb")
+// Preload models to avoid jank
+useGLTF.preload("/assets/models/glb/PED-SP-BF.glb")
+useGLTF.preload("/assets/models/glb/DESK-BF.glb")
+useGLTF.preload("/assets/models/glb/door.glb")
+useGLTF.preload("/assets/models/glb/WS-WC.glb")
+useGLTF.preload("/assets/models/glb/bin1.glb")
+useGLTF.preload("/assets/models/glb/MTB-TBASE.glb")

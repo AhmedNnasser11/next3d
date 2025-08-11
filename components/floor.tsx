@@ -93,7 +93,7 @@ export function FloorMesh() {
   const innerPolygon = useMemo(() => {
     if (polygon.length < 3) return polygon
     // 2–5 mm inset, scaled to wall thickness but never too small
-    const inset = -Math.min(0.005, wallThickness * 0.25) // meters
+    const inset = Math.min(0.005, wallThickness * 0.25) // meters - positive value for inward offset
     try {
       return offsetPolygon(polygon, inset)
     } catch {

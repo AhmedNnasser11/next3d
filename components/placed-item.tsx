@@ -50,12 +50,14 @@ function snapToNearestWall(ptXZ: [number, number], walls: SnapWall[]) {
   return best
 }
 
-// Optional GLTFs per kind; replace with your own when available
+// GLTFs per kind from the assets folder
 const MODEL_MAP: Partial<Record<PlacedItemType["kind"], { url: string; rotationOffsetY?: number; scale?: number }>> = {
-  chair: { url: "/assets/3d/duck.glb", rotationOffsetY: 0, scale: 0.02 }, // demo placeholder
-  table: undefined, // add your table model here
-  door: undefined, // add your door model here
-  window: undefined, // add your window model here
+  chair: { url: "/assets/models/glb/PED-SP-BF.glb", rotationOffsetY: Math.PI / 2, scale: 1 },
+  table: { url: "/assets/models/glb/DESK-BF.glb", rotationOffsetY: Math.PI / 2, scale: 1 },
+  door: { url: "/assets/models/glb/door.glb", rotationOffsetY: Math.PI / 2, scale: 1 }, // Fixed door rotation
+  window: { url: "/assets/models/glb/WS-WC.glb", rotationOffsetY: 0, scale: 1 },
+  plant: { url: "/assets/models/glb/bin1.glb", rotationOffsetY: 0, scale: 1 },
+  rug: { url: "/assets/models/glb/MTB-TBASE.glb", rotationOffsetY: 0, scale: 1 },
 }
 
 export function PlacedItem({ item }: { item: PlacedItemType }) {
@@ -70,6 +72,11 @@ export function PlacedItem({ item }: { item: PlacedItemType }) {
   const intersectPlane = useDragOnPlane(0)
 
   const isSelected = selectedId === item.id
+  
+  // Use specific model from item if available
+  const modelConfig = item.model ? 
+    { url: item.model, rotationOffsetY: 0, scale: 1 } : 
+    MODEL_MAP[item.kind]
 
   // Fallback primitive dimensions if no GLTF
   const fallbackDims: [number, number, number] =
@@ -77,15 +84,17 @@ export function PlacedItem({ item }: { item: PlacedItemType }) {
       ? [0.9, 2.0, 0.1]
       : item.kind === "window"
         ? [1.2, 1.0, 0.1]
-        : item.kind === "table"
-          ? [1.2, 0.75, 0.8]
-          : item.kind === "chair"
-            ? [0.5, 0.9, 0.5]
-            : item.kind === "plant"
-              ? [0.4, 1.2, 0.4]
-              : item.kind === "rug"
-                ? [1.8, 0.02, 1.2]
-                : [0.8, 0.8, 0.8]
+      : item.kind === "table" || item.kind === "desk"
+        ? [1.2, 0.75, 0.8]
+      : item.kind === "chair"
+        ? [0.5, 0.9, 0.5]
+      : item.kind === "plant"
+        ? [0.4, 1.2, 0.4]
+      : item.kind === "rug"
+        ? [1.8, 0.02, 1.2]
+      : item.kind === "storage" || item.kind === "filing"
+        ? [0.8, 1.8, 0.5]
+        : [0.8, 0.8, 0.8]
 
   // Bounds from GLTF (if present)
   const [bounds, setBounds] = useState<{ box: THREE.Box3; size: THREE.Vector3; center: THREE.Vector3 } | null>(null)
@@ -201,12 +210,12 @@ export function PlacedItem({ item }: { item: PlacedItemType }) {
         <meshBasicMaterial color="#10b981" transparent opacity={0.8} />
       </mesh>
 
-      {/* Render GLTF if available for kind, else fallback primitive */}
-      {MODEL_MAP[item.kind] ? (
-        <group scale={MODEL_MAP[item.kind]?.scale ?? 1}>
+      {/* Render GLTF if available for kind or from item.model, else fallback primitive */}
+      {modelConfig ? (
+        <group scale={modelConfig.scale ?? 1}>
           <GLTFModel
-            url={MODEL_MAP[item.kind]!.url}
-            rotationOffsetY={MODEL_MAP[item.kind]?.rotationOffsetY ?? 0}
+            url={modelConfig.url}
+            rotationOffsetY={modelConfig.rotationOffsetY ?? 0}
             onBounds={setBounds}
           />
         </group>

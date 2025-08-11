@@ -27,9 +27,83 @@ export function FloorplannerCanvas() {
   const movePoint = usePlannerStore((s) => s.fpMovePoint)
   const deletePoint = usePlannerStore((s) => s.fpDeletePoint)
   const buildFromFloorplan = usePlannerStore((s) => s.buildFromFloorplan)
+  const setTab = usePlannerStore((s) => s.setTab)
 
   const [hover, setHover] = useState<Pt | null>(null)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
+
+  // Add toolbar UI for floorplan editing modes
+  const renderToolbar = () => {
+    return (
+      <div className="absolute top-4 left-4 flex flex-col gap-2 bg-white/80 backdrop-blur-sm p-2 rounded-md shadow-md">
+        <Button
+          size="sm"
+          variant={mode === "MOVE" ? "default" : "outline"}
+          onClick={() => setMode("MOVE")}
+          className="flex items-center gap-1"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M5 9l4-4 4 4"/>
+            <path d="M5 15l4 4 4-4"/>
+            <path d="M19 9l-4-4-4 4"/>
+            <path d="M19 15l-4 4-4-4"/>
+          </svg>
+          Move
+        </Button>
+        <Button
+          size="sm"
+          variant={mode === "DRAW" ? "default" : "outline"}
+          onClick={() => setMode("DRAW")}
+          className="flex items-center gap-1"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 3h18v18H3z"/>
+          </svg>
+          Draw
+        </Button>
+        <Button
+          size="sm"
+          variant={mode === "DELETE" ? "default" : "outline"}
+          onClick={() => setMode("DELETE")}
+          className="flex items-center gap-1"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6L6 18"/>
+            <path d="M6 6l12 12"/>
+          </svg>
+          Delete
+        </Button>
+        <div className="h-px w-full bg-gray-200 my-1"></div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={clear}
+          className="flex items-center gap-1 text-red-500 hover:text-red-600"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 6h18"/>
+            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+          </svg>
+          Clear
+        </Button>
+        <Button
+          size="sm"
+          variant="default"
+          onClick={() => {
+            if (pts.length > 2) {
+              closeLoop()
+              buildFromFloorplan()
+              setTab("design")
+            }
+          }}
+          disabled={pts.length <= 2}
+          className="flex items-center gap-1 mt-2"
+        >
+          Done
+        </Button>
+      </div>
+    )
+  }
 
   useEffect(() => {
     const c = canvasRef.current
@@ -200,27 +274,18 @@ export function FloorplannerCanvas() {
         }}
         onPointerUp={() => setDragIndex(null)}
       />
-
-      <div className="absolute left-2 right-2 top-2 flex items-center justify-between gap-2">
+      
+      {renderToolbar()}
+      
+      {/* Status indicator */}
+      <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm p-2 rounded-md shadow-md text-sm">
         <div className="flex items-center gap-2">
-          <Button variant={mode === "MOVE" ? "default" : "secondary"} size="sm" onClick={() => setMode("MOVE")}>
-            Move Points
-          </Button>
-          <Button variant={mode === "DRAW" ? "default" : "secondary"} size="sm" onClick={() => setMode("DRAW")}>
-            Draw Walls
-          </Button>
-          <Button variant={mode === "DELETE" ? "default" : "secondary"} size="sm" onClick={() => setMode("DELETE")}>
-            Delete Points
-          </Button>
+          <span className="font-medium">Mode:</span>
+          <span>{mode}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">Lengths appear in cm</Badge>
-          <Button size="sm" variant="outline" onClick={() => clear()}>
-            Clear
-          </Button>
-          <Button size="sm" onClick={() => buildFromFloorplan()}>
-            Done » Build 3D
-          </Button>
+          <span className="font-medium">Points:</span>
+          <span>{pts.length}</span>
         </div>
       </div>
     </div>

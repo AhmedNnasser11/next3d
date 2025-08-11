@@ -83,16 +83,30 @@ export function RoomCanvas() {
 
   return (
     <div className="relative w-full h-full">
-      <Canvas className="w-full h-full bg-white" shadows onPointerMissed={() => setSelected(null)}>
-        <Suspense fallback={null}>
+      {/* 3D View Controls Helper */}
+      <div className="absolute bottom-4 left-4 bg-white/80 backdrop-blur-sm p-2 rounded-md shadow-md text-sm">
+        <div className="text-xs font-medium mb-1">3D Controls:</div>
+        <div className="text-xs">• Rotate: Left-click + Drag</div>
+        <div className="text-xs">• Pan: Right-click + Drag</div>
+        <div className="text-xs">• Zoom: Scroll wheel</div>
+        <div className="text-xs">• Select item: Click on furniture</div>
+      </div>
+      <Canvas className="w-full h-full bg-gradient-to-b from-blue-50 to-white" shadows onPointerMissed={() => setSelected(null)}>
+        <Suspense fallback={
+          <mesh position={[0, 1, 0]}>
+            <boxGeometry args={[1, 1, 1]} />
+            <meshStandardMaterial color="#10b981" wireframe={true} />
+          </mesh>
+        }>
           <PerspectiveCamera makeDefault position={[5, 3, 7]} fov={50} />
-          <ambientLight intensity={0.5} />
+          <ambientLight intensity={0.7} />
           <directionalLight
             position={[8, 12, 6]}
-            intensity={0.9}
+            intensity={1.1}
             castShadow
             shadow-mapSize-width={2048}
             shadow-mapSize-height={2048}
+            shadow-bias={-0.0001}
           />
           <Environment preset="apartment" />
 
@@ -110,7 +124,7 @@ export function RoomCanvas() {
             enableDamping
             dampingFactor={0.08}
             minDistance={1}
-            maxDistance={100}
+            maxDistance={20}
             target={[0, 0, 0]}
           />
 
