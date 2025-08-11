@@ -105,8 +105,8 @@ export function FloorMesh() {
     if (innerPolygon.length < 3) return null
     const s = new THREE.Shape()
     const [p0, ...rest] = innerPolygon
-    s.moveTo(p0[0], p0[1])
-    for (const p of rest) s.lineTo(p[0], p[1])
+    s.moveTo(p0[0], -p0[1])
+    for (const p of rest) s.lineTo(p[0], -p[1])
     s.closePath()
     return s
   }, [innerPolygon])
