@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
@@ -17,7 +18,7 @@ type Props = {
  * - Applies optional rotationOffsetY to match your model's forward direction with +Z
  */
 export function GLTFModel({ url, rotationOffsetY = 0, onBounds }: Props) {
-  const { scene, progress } = useGLTF(url)
+  const { scene } = useGLTF(url)
   const [isLoading, setIsLoading] = useState(true)
 
   const clone = useMemo(() => {
