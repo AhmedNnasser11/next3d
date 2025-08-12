@@ -1,15 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
+import type React from "react"
+
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-// import { Badge } from "@/components/ui/badge" // (unused)
 import { usePlannerStore } from "@/lib/store"
 
 type Mode = "MOVE" | "DRAW" | "DELETE"
+type DragMode = "CORNER" | "WALL" | null
 
 const PX_PER_M = 50
 const M_PER_PX = 1 / PX_PER_M
+const WALL_HIT_TOLERANCE = 8 // pixels
 
 type Pt = { x: number; z: number }
 
@@ -17,9 +20,33 @@ function dist(a: Pt, b: Pt) {
   return Math.hypot(a.x - b.x, a.z - b.z)
 }
 
+function distanceToLineSegment(point: Pt, lineStart: Pt, lineEnd: Pt): number {
+  const A = point.x - lineStart.x
+  const B = point.z - lineStart.z
+  const C = lineEnd.x - lineStart.x
+  const D = lineEnd.z - lineStart.z
+
+  const dot = A * C + B * D
+  const lenSq = C * C + D * D
+
+  if (lenSq === 0) return Math.hypot(A, B)
+
+  let param = dot / lenSq
+  param = Math.max(0, Math.min(1, param))
+
+  const xx = lineStart.x + param * C
+  const yy = lineStart.z + param * D
+
+  return Math.hypot(point.x - xx, point.z - yy)
+}
+
+function snapToGrid(value: number, gridSize = 0.1): number {
+  return Math.round(value / gridSize) * gridSize
+}
+
 /** Scale the canvas for device pixel ratio and draw in CSS pixels */
 function resizeCanvasToDisplaySize(c: HTMLCanvasElement) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2) // cap to keep perf reasonable
+  const dpr = Math.min(window.devicePixelRatio || 1, 2)
   const { clientWidth: w, clientHeight: h } = c
   const displayW = Math.max(1, Math.floor(w * dpr))
   const displayH = Math.max(1, Math.floor(h * dpr))
@@ -30,12 +57,11 @@ function resizeCanvasToDisplaySize(c: HTMLCanvasElement) {
     changed = true
   }
   const ctx = c.getContext("2d")!
-  // Map 1 canvas unit = 1 CSS pixel
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   return changed
 }
 
-export function FloorplannerCanvas() {
+export function EnhancedFloorplannerCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [mode, setMode] = useState<Mode>("MOVE")
   const pts = usePlannerStore((s) => s.fpPoints)
@@ -49,8 +75,46 @@ export function FloorplannerCanvas() {
   const setTab = usePlannerStore((s) => s.setTab)
 
   const [hover, setHover] = useState<Pt | null>(null)
+  const [hoverWallIndex, setHoverWallIndex] = useState<number | null>(null)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [sizeTick, setSizeTick] = useState(0) // bump to trigger redraw after resize
+  const [dragWallIndex, setDragWallIndex] = useState<number | null>(null)
+  const [dragMode, setDragMode] = useState<DragMode>(null)
+  const [dragStartPoints, setDragStartPoints] = useState<Pt[]>([])
+  const [dragOffset, setDragOffset] = useState<Pt>({ x: 0, z: 0 })
+  const [isShiftPressed, setIsShiftPressed] = useState(false)
+  const [sizeTick, setSizeTick] = useState(0)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setIsShiftPressed(true)
+      if (e.key === "Escape") {
+        // Cancel current drag and revert to pre-drag state
+        if (dragMode && dragStartPoints.length > 0) {
+          dragStartPoints.forEach((pt, i) => {
+            if (i < pts.length) {
+              movePoint(i, [pt.x, pt.z])
+            }
+          })
+        }
+        setDragMode(null)
+        setDragIndex(null)
+        setDragWallIndex(null)
+        setDragStartPoints([])
+        setMode("MOVE")
+      }
+    }
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setIsShiftPressed(false)
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    window.addEventListener("keyup", onKeyUp)
+    return () => {
+      window.removeEventListener("keydown", onKeyDown)
+      window.removeEventListener("keyup", onKeyUp)
+    }
+  }, [dragMode, dragStartPoints, pts.length, movePoint])
 
   // Toolbar UI
   const renderToolbar = () => {
@@ -98,7 +162,7 @@ export function FloorplannerCanvas() {
           size="sm"
           variant="outline"
           onClick={clear}
-          className="flex items-center gap-1 text-red-500 hover:text-red-600"
+          className="flex items-center gap-1 text-red-500 hover:text-red-600 bg-transparent"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M3 6h18" />
@@ -125,32 +189,27 @@ export function FloorplannerCanvas() {
     )
   }
 
-  // Draw whenever data/mode/hover or size changes
   useEffect(() => {
     const c = canvasRef.current
     if (!c) return
     const ctx = c.getContext("2d")!
 
-    // Always ensure DPR transform is set before drawing
     resizeCanvasToDisplaySize(c)
 
     const W = c.clientWidth
     const H = c.clientHeight
 
-    // helpers
     const toPx = (p: Pt) => ({
       x: W / 2 + p.x * PX_PER_M,
       y: H / 2 - p.z * PX_PER_M,
     })
 
-    // clear
+    // Clear and background
     ctx.clearRect(0, 0, W, H)
-
-    // bg
     ctx.fillStyle = "#ffffff"
     ctx.fillRect(0, 0, W, H)
 
-    // grid
+    // Grid
     ctx.strokeStyle = "#eef2f7"
     ctx.lineWidth = 1
     for (let x = 0; x < W; x += PX_PER_M) {
@@ -166,7 +225,7 @@ export function FloorplannerCanvas() {
       ctx.stroke()
     }
 
-    // axes
+    // Axes
     ctx.strokeStyle = "#d1d5db"
     ctx.beginPath()
     ctx.moveTo(W / 2, 0)
@@ -175,12 +234,21 @@ export function FloorplannerCanvas() {
     ctx.lineTo(W, H / 2)
     ctx.stroke()
 
-    // segments with cm labels
     ctx.lineWidth = 3
-    ctx.strokeStyle = "#0ea5e9"
-    for (const s of segs) {
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i]
       const a = toPx({ x: s.a[0], z: s.a[1] })
       const b = toPx({ x: s.b[0], z: s.b[1] })
+
+      // Determine wall color based on state
+      let strokeColor = "#0ea5e9"
+      if (dragWallIndex === i && dragMode === "WALL") {
+        strokeColor = "#ef4444" // Red for active drag
+      } else if (hoverWallIndex === i && mode === "MOVE") {
+        strokeColor = "#22c55e" // Green for hover
+      }
+
+      ctx.strokeStyle = strokeColor
       ctx.beginPath()
       ctx.moveTo(a.x, a.y)
       ctx.lineTo(b.x, b.y)
@@ -190,63 +258,57 @@ export function FloorplannerCanvas() {
       const mpx = toPx(mid)
       const lenM = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1])
       const lenCm = Math.round(lenM * 100)
-      ctx.fillStyle = "#111827"
-      ctx.font = "12px ui-sans-serif, system-ui"
-      ctx.fillText(`${lenCm} cm`, mpx.x + 6, mpx.y - 6)
+
+      ctx.fillStyle = dragWallIndex === i ? "#ef4444" : "#111827"
+      ctx.font = dragWallIndex === i ? "bold 14px ui-sans-serif" : "12px ui-sans-serif"
+
+      const labelOffset = dragWallIndex === i ? 12 : 6
+      ctx.fillText(`${lenCm} cm`, mpx.x + labelOffset, mpx.y - labelOffset)
     }
 
-    // points
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i]
       const px = toPx(p)
       ctx.beginPath()
-      ctx.arc(px.x, px.y, 6, 0, Math.PI * 2)
-      ctx.fillStyle = "#10b981"
+      ctx.arc(px.x, px.y, dragIndex === i ? 8 : 6, 0, Math.PI * 2)
+      ctx.fillStyle = dragIndex === i ? "#ef4444" : "#10b981"
       ctx.fill()
-      ctx.strokeStyle = "#065f46"
+      ctx.strokeStyle = dragIndex === i ? "#dc2626" : "#065f46"
+      ctx.lineWidth = 2
       ctx.stroke()
     }
 
-    // drawing preview
+    // Drawing preview
     if (hover && mode === "DRAW" && pts.length > 0) {
       const last = pts[pts.length - 1]
       const a = toPx(last)
       const b = toPx(hover)
       ctx.strokeStyle = "#22c55e"
       ctx.setLineDash([6, 4])
+      ctx.lineWidth = 2
       ctx.beginPath()
       ctx.moveTo(a.x, a.y)
       ctx.lineTo(b.x, b.y)
       ctx.stroke()
       ctx.setLineDash([])
     }
-  }, [pts, segs, hover, mode, sizeTick])
+  }, [pts, segs, hover, mode, hoverWallIndex, dragIndex, dragWallIndex, dragMode, sizeTick])
 
-  // Resize handling (works even when panel becomes visible later)
+  // Resize handling
   useEffect(() => {
     const c = canvasRef.current
     if (!c) return
     const ro = new ResizeObserver(() => {
       resizeCanvasToDisplaySize(c)
-      setSizeTick((t) => t + 1) // trigger redraw
+      setSizeTick((t) => t + 1)
     })
     ro.observe(c)
-    // initial
     resizeCanvasToDisplaySize(c)
     setSizeTick((t) => t + 1)
     return () => ro.disconnect()
   }, [])
 
-  // ESC to exit drawing (desktop)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMode("MOVE")
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [])
-
-  // Client → world (use CSS pixels so it matches DPR scaling)
+  // Client → world conversion
   const clientToWorld = (ev: React.PointerEvent<HTMLCanvasElement>): Pt => {
     const rect = ev.currentTarget.getBoundingClientRect()
     const xPx = ev.clientX - rect.left
@@ -254,6 +316,31 @@ export function FloorplannerCanvas() {
     const x = (xPx - rect.width / 2) * M_PER_PX
     const z = (rect.height / 2 - yPx) * M_PER_PX
     return { x, z }
+  }
+
+  const findHitTarget = (worldPos: Pt) => {
+    // First check for corner hits (higher priority)
+    for (let i = 0; i < pts.length; i++) {
+      const d = dist(worldPos, pts[i])
+      if (d < 0.2) {
+        // 20cm in world units
+        return { type: "CORNER" as const, index: i }
+      }
+    }
+
+    // Then check for wall hits
+    for (let i = 0; i < segs.length; i++) {
+      const s = segs[i]
+      const lineStart = { x: s.a[0], z: s.a[1] }
+      const lineEnd = { x: s.b[0], z: s.b[1] }
+      const distToLine = distanceToLineSegment(worldPos, lineStart, lineEnd)
+
+      if (distToLine < WALL_HIT_TOLERANCE * M_PER_PX) {
+        return { type: "WALL" as const, index: i }
+      }
+    }
+
+    return null
   }
 
   return (
@@ -268,16 +355,68 @@ export function FloorplannerCanvas() {
         onPointerMove={(e) => {
           const p = clientToWorld(e)
           setHover(p)
-          if (dragIndex != null && mode === "MOVE") {
-            movePoint(dragIndex, [p.x, p.z])
+
+          if (dragMode === "CORNER" && dragIndex !== null) {
+            const newPos = isShiftPressed ? { x: snapToGrid(p.x), z: snapToGrid(p.z) } : p
+            movePoint(dragIndex, [newPos.x, newPos.z])
+          } else if (dragMode === "WALL" && dragWallIndex !== null) {
+            const seg = segs[dragWallIndex]
+            if (!seg) return
+
+            // Calculate wall normal and constrain movement
+            const wallVec = { x: seg.b[0] - seg.a[0], z: seg.b[1] - seg.a[1] }
+            const wallLen = Math.hypot(wallVec.x, wallVec.z)
+            if (wallLen === 0) return
+
+            const wallNormal = { x: -wallVec.z / wallLen, z: wallVec.x / wallLen }
+
+            // Project mouse movement onto wall normal
+            const dragDelta = { x: p.x - dragOffset.x, z: p.z - dragOffset.z }
+            const normalProjection = dragDelta.x * wallNormal.x + dragDelta.z * wallNormal.z
+
+            const constrainedDelta = {
+              x: wallNormal.x * normalProjection,
+              z: wallNormal.z * normalProjection,
+            }
+
+            // Apply grid snapping if Shift is held
+            if (isShiftPressed) {
+              constrainedDelta.x = snapToGrid(constrainedDelta.x)
+              constrainedDelta.z = snapToGrid(constrainedDelta.z)
+            }
+
+            // Move both endpoints of the wall
+            const aIndex = pts.findIndex((pt) => Math.abs(pt.x - seg.a[0]) < 1e-6 && Math.abs(pt.z - seg.a[1]) < 1e-6)
+            const bIndex = pts.findIndex((pt) => Math.abs(pt.x - seg.b[0]) < 1e-6 && Math.abs(pt.z - seg.b[1]) < 1e-6)
+
+            if (aIndex !== -1) {
+              const newA = {
+                x: dragStartPoints[aIndex].x + constrainedDelta.x,
+                z: dragStartPoints[aIndex].z + constrainedDelta.z,
+              }
+              movePoint(aIndex, [newA.x, newA.z])
+            }
+
+            if (bIndex !== -1) {
+              const newB = {
+                x: dragStartPoints[bIndex].x + constrainedDelta.x,
+                z: dragStartPoints[bIndex].z + constrainedDelta.z,
+              }
+              movePoint(bIndex, [newB.x, newB.z])
+            }
+          }
+
+          if (mode === "MOVE" && !dragMode) {
+            const hit = findHitTarget(p)
+            setHoverWallIndex(hit?.type === "WALL" ? hit.index : null)
           }
         }}
         onPointerDown={(e) => {
-          // Capture to keep getting move events while dragging on touch
-          try { e.currentTarget.setPointerCapture(e.pointerId) } catch {}
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId)
+          } catch {}
           const p = clientToWorld(e)
 
-          // Right-click (desktop) exits modes
           if ((e as any).button === 2) {
             setMode("MOVE")
             return
@@ -285,7 +424,6 @@ export function FloorplannerCanvas() {
 
           if (mode === "DRAW") {
             if (pts.length >= 3 && Math.hypot(p.x - pts[0].x, p.z - pts[0].z) < 0.25) {
-              // close loop
               closeLoop()
               return
             }
@@ -294,53 +432,61 @@ export function FloorplannerCanvas() {
           }
 
           if (mode === "MOVE") {
-            let best = -1
-            let bestD = 0.2
-            for (let i = 0; i < pts.length; i++) {
-              const d = dist(p, pts[i])
-              if (d < bestD) {
-                best = i
-                bestD = d
-              }
+            const hit = findHitTarget(p)
+
+            if (hit?.type === "CORNER") {
+              setDragMode("CORNER")
+              setDragIndex(hit.index)
+              setDragStartPoints([...pts])
+            } else if (hit?.type === "WALL") {
+              setDragMode("WALL")
+              setDragWallIndex(hit.index)
+              setDragOffset(p)
+              setDragStartPoints([...pts])
             }
-            if (best >= 0) setDragIndex(best)
           }
 
           if (mode === "DELETE") {
-            let best = -1
-            let bestD = 0.2
-            for (let i = 0; i < pts.length; i++) {
-              const d = dist(p, pts[i])
-              if (d < bestD) {
-                best = i
-                bestD = d
-              }
+            const hit = findHitTarget(p)
+            if (hit?.type === "CORNER") {
+              deletePoint(hit.index)
             }
-            if (best >= 0) deletePoint(best)
           }
         }}
         onPointerUp={(e) => {
-          try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
+          try {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+          } catch {}
+          setDragMode(null)
           setDragIndex(null)
+          setDragWallIndex(null)
+          setDragStartPoints([])
         }}
         onPointerCancel={(e) => {
-          try { e.currentTarget.releasePointerCapture(e.pointerId) } catch {}
+          try {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+          } catch {}
+          setDragMode(null)
           setDragIndex(null)
+          setDragWallIndex(null)
+          setDragStartPoints([])
         }}
       />
 
       {renderToolbar()}
 
-      {/* Status indicator */}
       <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm p-2 rounded-md shadow-md text-sm">
         <div className="flex items-center gap-2">
           <span className="font-medium">Mode:</span>
           <span>{mode}</span>
+          {dragMode && <span className="text-blue-600">({dragMode})</span>}
         </div>
         <div className="flex items-center gap-2">
           <span className="font-medium">Points:</span>
           <span>{pts.length}</span>
         </div>
+        {isShiftPressed && <div className="text-blue-600 text-xs mt-1">Grid Snap: ON</div>}
+        <div className="text-xs text-gray-500 mt-1">ESC: Cancel • Shift: Grid Snap</div>
       </div>
     </div>
   )

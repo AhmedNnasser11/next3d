@@ -6,8 +6,8 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { CameraControlsPanel } from "@/components/camera-controls"
 import { RoomCanvas } from "@/components/room-canvas"
 import { usePlannerStore } from "@/lib/store"
-import { FloorplannerCanvas } from "@/components/floorplanner-canvas"
 import { TopBar } from "@/components/top-bar"
+import { EnhancedFloorplannerCanvas } from "@/components/floorplanner-canvas"
 
 export default function Page() {
   const tab = usePlannerStore((s) => s.tab)
@@ -29,7 +29,7 @@ export default function Page() {
         <main className="relative flex-1">
           {tab === "floorplan" ? (
             <div className="w-full h-[calc(100vh-56px)]">
-              <FloorplannerCanvas />
+              <EnhancedFloorplannerCanvas />
             </div>
           ) : (
             <div className="w-full h-[calc(100vh-56px)]">
