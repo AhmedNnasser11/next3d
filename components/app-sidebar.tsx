@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import {
   Sidebar,
@@ -12,14 +12,14 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
-} from "@/components/ui/sidebar"
-import { usePlannerStore } from "@/lib/store"
-import { CuboidIcon as Cube, Ruler, ShoppingCart } from 'lucide-react'
-import { ItemsPanel } from "@/components/items-panel"
+} from "@/components/ui/sidebar";
+import { usePlannerStore } from "@/lib/store";
+import { CuboidIcon as Cube, Ruler, ShoppingCart } from "lucide-react";
+import { ItemsPanel } from "@/components/items-panel";
 
 export function AppSidebar() {
-  const tab = usePlannerStore((s) => s.tab)
-  const setTab = usePlannerStore((s) => s.setTab)
+  const tab = usePlannerStore((s) => s.tab);
+  const setTab = usePlannerStore((s) => s.setTab);
 
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
@@ -36,7 +36,11 @@ export function AppSidebar() {
                   isActive={tab === "floorplan"}
                   onClick={() => setTab("floorplan")}
                   tooltip="Edit Floorplan"
-                  className={tab === "floorplan" ? "bg-primary text-primary-foreground" : ""}
+                  className={
+                    tab === "floorplan"
+                      ? "bg-primary text-primary-foreground"
+                      : ""
+                  }
                 >
                   <Ruler className="h-4 w-4" />
                   <span>{"Edit Floorplan"}</span>
@@ -47,7 +51,9 @@ export function AppSidebar() {
                   isActive={tab === "design"}
                   onClick={() => setTab("design")}
                   tooltip="Design"
-                  className={tab === "design" ? "bg-primary text-primary-foreground" : ""}
+                  className={
+                    tab === "design" ? "bg-primary text-primary-foreground" : ""
+                  }
                 >
                   <Cube className="h-4 w-4" />
                   <span>{"Design"}</span>
@@ -58,7 +64,9 @@ export function AppSidebar() {
                   isActive={tab === "shop"}
                   onClick={() => setTab("shop")}
                   tooltip="Add Items"
-                  className={tab === "shop" ? "bg-primary text-primary-foreground" : ""}
+                  className={
+                    tab === "shop" ? "bg-primary text-primary-foreground" : ""
+                  }
                 >
                   <ShoppingCart className="h-4 w-4" />
                   <span>{"Add Items"}</span>
@@ -77,7 +85,7 @@ export function AppSidebar() {
               <ItemsPanel />
             ) : (
               <div className="text-xs text-muted-foreground px-2 py-1">
-                Switch to "Add Items" to browse catalog.
+                Switch to &quot;Add Items&quot; to browse catalog.
               </div>
             )}
           </SidebarGroupContent>
@@ -85,5 +93,5 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter />
     </Sidebar>
-  )
+  );
 }

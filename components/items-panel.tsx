@@ -1,10 +1,9 @@
-"use client"
+"use client";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { catalogItems } from "@/lib/items"
-import { usePlannerStore } from "@/lib/store"
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { catalogItems } from "@/lib/items";
+import { usePlannerStore } from "@/lib/store";
 
 // Group items by category for better organization
 const groupedItems = catalogItems.reduce((acc, item) => {
@@ -20,7 +19,7 @@ const groupedItems = catalogItems.reduce((acc, item) => {
 const sortedCategories = Object.keys(groupedItems).sort();
 
 export function ItemsPanel() {
-  const addItem = usePlannerStore((s) => s.addItem)
+  const addItem = usePlannerStore((s) => s.addItem);
 
   return (
     <div className="flex flex-col gap-4 p-2 overflow-y-auto max-h-[calc(100vh-200px)]">
@@ -32,16 +31,22 @@ export function ItemsPanel() {
           </div>
           <div className="grid grid-cols-2 gap-2">
             {groupedItems[category].map((item) => (
-              <Card key={item.id} className="overflow-hidden hover:bg-muted/50 transition-colors cursor-pointer"
-                onClick={() => addItem({
-                  name: item.name,
-                  kind: item.kind,
-                  model: item.model
-                })}
+              <Card
+                key={item.id}
+                className="overflow-hidden hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() =>
+                  addItem({
+                    name: item.name,
+                    kind: item.kind,
+                    model: item.model,
+                  })
+                }
               >
                 <div className="p-2 text-center">
                   <div className="h-12 w-full rounded bg-muted flex items-center justify-center mb-1">
-                    <span className="text-xs text-muted-foreground">{item.kind}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {item.kind}
+                    </span>
                   </div>
                   <p className="text-xs truncate">{item.name}</p>
                 </div>
@@ -51,5 +56,5 @@ export function ItemsPanel() {
         </div>
       ))}
     </div>
-  )
+  );
 }
