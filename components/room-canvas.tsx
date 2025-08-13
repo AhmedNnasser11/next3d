@@ -5,7 +5,7 @@ import { Environment, OrbitControls, PerspectiveCamera, Grid } from "@react-thre
 import { Suspense, useEffect } from "react"
 import { usePlannerStore } from "@/lib/store"
 import { TransformToolbar } from "@/components/transform-toolbar"
-import { FloorMesh } from "./floor"
+import { FloorMesh, MultiFloor } from "./floor"
 import { Walls } from "./walls"
 import { PlacedItem } from "./placed-item"
 
@@ -128,7 +128,8 @@ export function RoomCanvas() {
             target={[0, 0, 0]}
           />
 
-          <FloorMesh />
+          {/* If multiple shapes are present, MultiFloor renders them all; otherwise FloorMesh falls back to single polygon */}
+          <MultiFloor />
           <Walls />
           <AutoHideFrontWall />
 

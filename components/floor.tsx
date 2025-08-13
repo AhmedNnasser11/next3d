@@ -131,3 +131,50 @@ export function FloorMesh() {
     </mesh>
   )
 }
+
+export function MultiFloor() {
+  const shapes = usePlannerStore((s) => s.individualShapes)
+  const floorColor = usePlannerStore((s) => s.floorColor)
+  const floorTexOn = usePlannerStore((s) => s.floorTexOn)
+  const wallThickness = usePlannerStore((s) => s.wallThickness)
+
+  const texture = useMemo(() => (floorTexOn ? makeFloorTexture() : null), [floorTexOn])
+
+  if (!shapes || shapes.length === 0) return null
+
+  return (
+    <>
+      {shapes.map((poly, idx) => {
+        const innerPolygon = (() => {
+          if (poly.length < 3) return poly
+          const inset = Math.min(0.005, wallThickness * 0.25)
+          try {
+            return offsetPolygon(poly as [number, number][], inset)
+          } catch {
+            return poly as [number, number][]
+          }
+        })()
+        if (innerPolygon.length < 3) return null
+        const shape = new THREE.Shape()
+        const [p0, ...rest] = innerPolygon
+        shape.moveTo(p0[0], -p0[1])
+        for (const p of rest) shape.lineTo(p[0], -p[1])
+        shape.closePath()
+        return (
+          <mesh key={idx} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <shapeGeometry args={[shape]} />
+            <meshStandardMaterial
+              color={floorTexOn ? "#ffffff" : floorColor}
+              map={texture ?? undefined}
+              metalness={0.0}
+              roughness={0.9}
+              polygonOffset
+              polygonOffsetFactor={1}
+              polygonOffsetUnits={1}
+            />
+          </mesh>
+        )
+      })}
+    </>
+  )
+}

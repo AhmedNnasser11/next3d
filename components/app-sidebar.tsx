@@ -77,7 +77,7 @@ export function AppSidebar() {
               <ItemsPanel />
             ) : (
               <div className="text-xs text-muted-foreground px-2 py-1">
-                Switch to "Design" or "Add Items" to add furniture.
+                Switch to &quot;Design&quot; or &quot;Add Items&quot; to add furniture.
               </div>
             )}
           </SidebarGroupContent>

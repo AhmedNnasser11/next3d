@@ -75,6 +75,7 @@ export function EnhancedFloorplannerCanvas() {
   const commitCurrentShape = usePlannerStore((s) => s.fpCommitCurrentShape)
   const movePointInShape = usePlannerStore((s) => s.fpMovePointInShape)
   const buildFromFloorplan = usePlannerStore((s) => s.buildFromFloorplan)
+  const buildFromIndividualShapes = usePlannerStore((s) => s.buildFromIndividualShapes)
   const setTab = usePlannerStore((s) => s.setTab)
 
   const [hover, setHover] = useState<Pt | null>(null)
@@ -196,6 +197,19 @@ export function EnhancedFloorplannerCanvas() {
         >
           Done
         </Button>
+        {shapes.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              buildFromIndividualShapes()
+              setTab("design")
+            }}
+            className="flex items-center gap-1 mt-2"
+          >
+            Show All in 3D
+          </Button>
+        )}
       </div>
     )
   }

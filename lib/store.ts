@@ -32,6 +32,9 @@ type State = {
   fpPoints: Pt[]
   fpSegments: { a: [number, number]; b: [number, number] }[]
   fpShapes: Pt[][]
+  
+  // New field to track individual shapes for 3D rendering
+  individualShapes: Pt[][]
 
   _orbitControls: any | null
   _objects: Record<string, THREE.Object3D>
@@ -60,6 +63,7 @@ type Actions = {
   fpCommitCurrentShape: () => void
   fpMovePointInShape: (shapeIndex: number, pointIndex: number, p: [number, number]) => void
   buildFromFloorplan: () => void
+  buildFromIndividualShapes: () => void
   ensureItemsInside: () => void
   addDefaultDecor: () => void
   registerObject: (id: string, obj: THREE.Object3D) => void
@@ -123,6 +127,39 @@ function computeWallsFromPolygon(polygon: [number, number][]): WallSeg[] {
   return walls
 }
 
+// Merge multiple shapes into one combined floorplan
+function mergeShapesIntoFloorplan(shapes: Pt[][]): [number, number][] {
+  if (shapes.length === 0) return []
+  if (shapes.length === 1) return shapes[0].map((p) => [p.x, p.z])
+  
+  // For multiple shapes, create a bounding box that encompasses all shapes
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+  
+  shapes.forEach(shape => {
+    shape.forEach(point => {
+      minX = Math.min(minX, point.x)
+      maxX = Math.max(maxX, point.x)
+      minZ = Math.min(minZ, point.z)
+      maxZ = Math.max(maxZ, point.z)
+    })
+  })
+  
+  // Add some padding around the shapes
+  const padding = 0.5 // 50cm padding
+  minX -= padding
+  maxX += padding
+  minZ -= padding
+  maxZ += padding
+  
+  // Create a rectangular floorplan that encompasses all shapes
+  return [
+    [minX, minZ],  // bottom-left
+    [maxX, minZ],  // bottom-right
+    [maxX, maxZ],  // top-right
+    [minX, maxZ],  // top-left
+  ]
+}
+
 const DEFAULT_POLY: [number, number][] = [
   [-3, -2],
   [3, -2],
@@ -169,6 +206,9 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
     fpSegments: [],
     // Committed 4-corner shapes
     fpShapes: [DEFAULT_POLY.map(([x, z]) => ({ x, z }))],
+
+    // New field to track individual shapes for 3D rendering
+    individualShapes: [DEFAULT_POLY.map(([x, z]) => ({ x, z }))],
 
     _orbitControls: null,
     _objects: {},
@@ -230,6 +270,7 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
         fpPoints: [],
         fpSegments: [],
         fpShapes: [DEFAULT_POLY.map(([x, z]) => ({ x, z }))],
+        individualShapes: [DEFAULT_POLY.map(([x, z]) => ({ x, z }))],
       }),
 
     serialize: () => {
@@ -348,7 +389,7 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
         const pts = s.fpPoints.slice()
         return { fpPoints: [], fpSegments: [], fpShapes: [...s.fpShapes, pts] }
       }),
-    fpClear: () => set({ fpPoints: [], fpSegments: [], fpShapes: [] }),
+    fpClear: () => set({ fpPoints: [], fpSegments: [], fpShapes: [], individualShapes: [] }),
     fpCommitCurrentShape: () =>
       set((s) => {
         if (s.fpPoints.length !== 4) return {}
@@ -367,16 +408,38 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
     buildFromFloorplan: () => {
       const { fpShapes, fpPoints } = get()
       let polygon: [number, number][] = []
+      
+      // If we have committed shapes, merge them all into one floorplan
       if (fpShapes.length > 0) {
-        polygon = fpShapes[fpShapes.length - 1].map((p) => [p.x, p.z])
+        polygon = mergeShapesIntoFloorplan(fpShapes)
       } else if (fpPoints.length === 4) {
+        // If no committed shapes but we have a current 4-point shape, use that
         polygon = fpPoints.map((p) => [p.x, p.z])
       } else {
         return
       }
+      
       const walls = computeWallsFromPolygon(polygon)
       const [cx2, cz2] = polygonCentroid(polygon)
       set({ floorPolygon: polygon, walls, roomCenter: [cx2, 0, cz2] })
+      get().ensureItemsInside()
+      if (get().placed.length === 0) {
+        get().addDefaultDecor()
+      }
+    },
+
+    buildFromIndividualShapes: () => {
+      const { fpShapes } = get()
+      
+      if (fpShapes.length === 0) return
+      
+      set({ individualShapes: fpShapes })
+      
+      const polygons: [number, number][][] = fpShapes.map((shape) => shape.map((p) => [p.x, p.z] as [number, number]))
+      const merged = mergeShapesIntoFloorplan(fpShapes)
+      const allWalls = polygons.flatMap((poly) => computeWallsFromPolygon(poly))
+      const [cx2, cz2] = polygonCentroid(merged)
+      set({ floorPolygon: merged, walls: allWalls, roomCenter: [cx2, 0, cz2] })
       get().ensureItemsInside()
       if (get().placed.length === 0) {
         get().addDefaultDecor()
