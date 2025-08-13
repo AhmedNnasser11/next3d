@@ -66,20 +66,26 @@ export function EnhancedFloorplannerCanvas() {
   const [mode, setMode] = useState<Mode>("MOVE")
   const pts = usePlannerStore((s) => s.fpPoints)
   const segs = usePlannerStore((s) => s.fpSegments)
+  const shapes = usePlannerStore((s) => s.fpShapes)
   const addPoint = usePlannerStore((s) => s.fpAddPoint)
-  const closeLoop = usePlannerStore((s) => s.fpCloseLoop)
+  // const closeLoop = usePlannerStore((s) => s.fpCloseLoop)
   const clear = usePlannerStore((s) => s.fpClear)
   const movePoint = usePlannerStore((s) => s.fpMovePoint)
   const deletePoint = usePlannerStore((s) => s.fpDeletePoint)
+  const commitCurrentShape = usePlannerStore((s) => s.fpCommitCurrentShape)
+  const movePointInShape = usePlannerStore((s) => s.fpMovePointInShape)
   const buildFromFloorplan = usePlannerStore((s) => s.buildFromFloorplan)
   const setTab = usePlannerStore((s) => s.setTab)
 
   const [hover, setHover] = useState<Pt | null>(null)
   const [hoverWallIndex, setHoverWallIndex] = useState<number | null>(null)
+  const [hoverShapeIndex, setHoverShapeIndex] = useState<number | null>(null)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragWallIndex, setDragWallIndex] = useState<number | null>(null)
   const [dragMode, setDragMode] = useState<DragMode>(null)
   const [dragStartPoints, setDragStartPoints] = useState<Pt[]>([])
+  const [dragStartShapePoints, setDragStartShapePoints] = useState<Pt[]>([])
+  const [dragShapeIndex, setDragShapeIndex] = useState<number | null>(null) // -1 current, >=0 committed shape
   const [dragOffset, setDragOffset] = useState<Pt>({ x: 0, z: 0 })
   const [isShiftPressed, setIsShiftPressed] = useState(false)
   const [sizeTick, setSizeTick] = useState(0)
@@ -89,17 +95,24 @@ export function EnhancedFloorplannerCanvas() {
       if (e.key === "Shift") setIsShiftPressed(true)
       if (e.key === "Escape") {
         // Cancel current drag and revert to pre-drag state
-        if (dragMode && dragStartPoints.length > 0) {
-          dragStartPoints.forEach((pt, i) => {
-            if (i < pts.length) {
-              movePoint(i, [pt.x, pt.z])
-            }
-          })
+        if (dragMode) {
+          if (dragShapeIndex === -1 && dragStartPoints.length > 0) {
+            dragStartPoints.forEach((pt, i) => {
+              if (i < pts.length) movePoint(i, [pt.x, pt.z])
+            })
+          }
+          if (dragShapeIndex !== null && dragShapeIndex >= 0 && dragStartShapePoints.length > 0) {
+            dragStartShapePoints.forEach((pt, i) => {
+              movePointInShape(dragShapeIndex, i, [pt.x, pt.z])
+            })
+          }
         }
         setDragMode(null)
         setDragIndex(null)
         setDragWallIndex(null)
+        setDragShapeIndex(null)
         setDragStartPoints([])
+        setDragStartShapePoints([])
         setMode("MOVE")
       }
     }
@@ -114,7 +127,7 @@ export function EnhancedFloorplannerCanvas() {
       window.removeEventListener("keydown", onKeyDown)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [dragMode, dragStartPoints, pts.length, movePoint])
+  }, [dragMode, dragStartPoints, dragStartShapePoints, dragShapeIndex, pts.length, movePoint, movePointInShape])
 
   // Toolbar UI
   const renderToolbar = () => {
@@ -174,13 +187,11 @@ export function EnhancedFloorplannerCanvas() {
           size="sm"
           variant="default"
           onClick={() => {
-            if (pts.length > 2) {
-              closeLoop()
-              buildFromFloorplan()
-              setTab("design")
-            }
+            if (pts.length === 4) commitCurrentShape()
+            buildFromFloorplan()
+            setTab("design")
           }}
-          disabled={pts.length <= 2}
+          disabled={!(pts.length === 4 || shapes.length > 0)}
           className="flex items-center gap-1 mt-2"
         >
           Done
@@ -235,6 +246,50 @@ export function EnhancedFloorplannerCanvas() {
     ctx.stroke()
 
     ctx.lineWidth = 3
+    // Draw committed shapes first
+    shapes.forEach((shape, sIdx) => {
+      for (let i = 0; i < shape.length; i++) {
+        const aPt = shape[i]
+        const bPt = shape[(i + 1) % shape.length]
+        const a = toPx({ x: aPt.x, z: aPt.z })
+        const b = toPx({ x: bPt.x, z: bPt.z })
+
+        let strokeColor = "#0ea5e9"
+        if (dragMode === "WALL" && dragShapeIndex === sIdx && dragWallIndex === i) strokeColor = "#ef4444"
+        else if (hoverShapeIndex === sIdx && hoverWallIndex === i && mode === "MOVE") strokeColor = "#22c55e"
+
+        ctx.strokeStyle = strokeColor
+        ctx.beginPath()
+        ctx.moveTo(a.x, a.y)
+        ctx.lineTo(b.x, b.y)
+        ctx.stroke()
+
+        const mid = { x: (aPt.x + bPt.x) / 2, z: (aPt.z + bPt.z) / 2 }
+        const mpx = toPx(mid)
+        const lenM = Math.hypot(bPt.x - aPt.x, bPt.z - aPt.z)
+        const lenCm = Math.round(lenM * 100)
+
+        const isActive = dragMode === "WALL" && dragShapeIndex === sIdx && dragWallIndex === i
+        ctx.fillStyle = isActive ? "#ef4444" : "#111827"
+        ctx.font = isActive ? "bold 14px ui-sans-serif" : "12px ui-sans-serif"
+        const labelOffset = isActive ? 12 : 6
+        ctx.fillText(`${lenCm} cm`, mpx.x + labelOffset, mpx.y - labelOffset)
+      }
+      // draw shape corners
+      for (let i = 0; i < shape.length; i++) {
+        const p = shape[i]
+        const px = toPx(p)
+        const isDragged = dragMode === "CORNER" && dragShapeIndex === sIdx && dragIndex === i
+        ctx.beginPath()
+        ctx.arc(px.x, px.y, isDragged ? 8 : 6, 0, Math.PI * 2)
+        ctx.fillStyle = isDragged ? "#ef4444" : "#10b981"
+        ctx.fill()
+        ctx.strokeStyle = isDragged ? "#dc2626" : "#065f46"
+        ctx.lineWidth = 2
+        ctx.stroke()
+      }
+    })
+
     for (let i = 0; i < segs.length; i++) {
       const s = segs[i]
       const a = toPx({ x: s.a[0], z: s.a[1] })
@@ -242,9 +297,9 @@ export function EnhancedFloorplannerCanvas() {
 
       // Determine wall color based on state
       let strokeColor = "#0ea5e9"
-      if (dragWallIndex === i && dragMode === "WALL") {
+      if (dragWallIndex === i && dragMode === "WALL" && dragShapeIndex === -1) {
         strokeColor = "#ef4444" // Red for active drag
-      } else if (hoverWallIndex === i && mode === "MOVE") {
+      } else if (hoverWallIndex === i && hoverShapeIndex === -1 && mode === "MOVE") {
         strokeColor = "#22c55e" // Green for hover
       }
 
@@ -259,10 +314,11 @@ export function EnhancedFloorplannerCanvas() {
       const lenM = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1])
       const lenCm = Math.round(lenM * 100)
 
-      ctx.fillStyle = dragWallIndex === i ? "#ef4444" : "#111827"
-      ctx.font = dragWallIndex === i ? "bold 14px ui-sans-serif" : "12px ui-sans-serif"
+      const isActiveInProgress = dragWallIndex === i && dragShapeIndex === -1
+      ctx.fillStyle = isActiveInProgress ? "#ef4444" : "#111827"
+      ctx.font = isActiveInProgress ? "bold 14px ui-sans-serif" : "12px ui-sans-serif"
 
-      const labelOffset = dragWallIndex === i ? 12 : 6
+      const labelOffset = isActiveInProgress ? 12 : 6
       ctx.fillText(`${lenCm} cm`, mpx.x + labelOffset, mpx.y - labelOffset)
     }
 
@@ -270,10 +326,11 @@ export function EnhancedFloorplannerCanvas() {
       const p = pts[i]
       const px = toPx(p)
       ctx.beginPath()
-      ctx.arc(px.x, px.y, dragIndex === i ? 8 : 6, 0, Math.PI * 2)
-      ctx.fillStyle = dragIndex === i ? "#ef4444" : "#10b981"
+      const isDragged = dragIndex === i && dragShapeIndex === -1 && dragMode === "CORNER"
+      ctx.arc(px.x, px.y, isDragged ? 8 : 6, 0, Math.PI * 2)
+      ctx.fillStyle = isDragged ? "#ef4444" : "#10b981"
       ctx.fill()
-      ctx.strokeStyle = dragIndex === i ? "#dc2626" : "#065f46"
+      ctx.strokeStyle = isDragged ? "#dc2626" : "#065f46"
       ctx.lineWidth = 2
       ctx.stroke()
     }
@@ -292,7 +349,7 @@ export function EnhancedFloorplannerCanvas() {
       ctx.stroke()
       ctx.setLineDash([])
     }
-  }, [pts, segs, hover, mode, hoverWallIndex, dragIndex, dragWallIndex, dragMode, sizeTick])
+  }, [pts, segs, shapes, hover, mode, hoverWallIndex, hoverShapeIndex, dragIndex, dragWallIndex, dragShapeIndex, dragMode, sizeTick])
 
   // Resize handling
   useEffect(() => {
@@ -322,9 +379,13 @@ export function EnhancedFloorplannerCanvas() {
     // First check for corner hits (higher priority)
     for (let i = 0; i < pts.length; i++) {
       const d = dist(worldPos, pts[i])
-      if (d < 0.2) {
-        // 20cm in world units
-        return { type: "CORNER" as const, index: i }
+      if (d < 0.2) return { type: "CORNER" as const, index: i, shapeIndex: -1 }
+    }
+    for (let sIdx = 0; sIdx < shapes.length; sIdx++) {
+      const shape = shapes[sIdx]
+      for (let i = 0; i < shape.length; i++) {
+        const d = dist(worldPos, shape[i])
+        if (d < 0.2) return { type: "CORNER" as const, index: i, shapeIndex: sIdx }
       }
     }
 
@@ -334,9 +395,15 @@ export function EnhancedFloorplannerCanvas() {
       const lineStart = { x: s.a[0], z: s.a[1] }
       const lineEnd = { x: s.b[0], z: s.b[1] }
       const distToLine = distanceToLineSegment(worldPos, lineStart, lineEnd)
-
-      if (distToLine < WALL_HIT_TOLERANCE * M_PER_PX) {
-        return { type: "WALL" as const, index: i }
+      if (distToLine < WALL_HIT_TOLERANCE * M_PER_PX) return { type: "WALL" as const, index: i, shapeIndex: -1 }
+    }
+    for (let sIdx = 0; sIdx < shapes.length; sIdx++) {
+      const shape = shapes[sIdx]
+      for (let i = 0; i < shape.length; i++) {
+        const a = shape[i]
+        const b = shape[(i + 1) % shape.length]
+        const distToLine = distanceToLineSegment(worldPos, a, b)
+        if (distToLine < WALL_HIT_TOLERANCE * M_PER_PX) return { type: "WALL" as const, index: i, shapeIndex: sIdx }
       }
     }
 
@@ -358,13 +425,32 @@ export function EnhancedFloorplannerCanvas() {
 
           if (dragMode === "CORNER" && dragIndex !== null) {
             const newPos = isShiftPressed ? { x: snapToGrid(p.x), z: snapToGrid(p.z) } : p
-            movePoint(dragIndex, [newPos.x, newPos.z])
+            if (dragShapeIndex === -1) {
+              movePoint(dragIndex, [newPos.x, newPos.z])
+            } else if (dragShapeIndex !== null) {
+              movePointInShape(dragShapeIndex, dragIndex, [newPos.x, newPos.z])
+            }
           } else if (dragMode === "WALL" && dragWallIndex !== null) {
-            const seg = segs[dragWallIndex]
-            if (!seg) return
+            // Determine segment endpoints based on context (current vs committed shape)
+            let segA: Pt | null = null
+            let segB: Pt | null = null
+            if (dragShapeIndex === -1) {
+              const seg = segs[dragWallIndex]
+              if (!seg) return
+              segA = { x: seg.a[0], z: seg.a[1] }
+              segB = { x: seg.b[0], z: seg.b[1] }
+            } else if (dragShapeIndex !== null) {
+              const shape = shapes[dragShapeIndex]
+              if (!shape) return
+              const aIdx = dragWallIndex
+              const bIdx = (dragWallIndex + 1) % shape.length
+              segA = shape[aIdx]
+              segB = shape[bIdx]
+            }
+            if (!segA || !segB) return
 
             // Calculate wall normal and constrain movement
-            const wallVec = { x: seg.b[0] - seg.a[0], z: seg.b[1] - seg.a[1] }
+            const wallVec = { x: segB.x - segA.x, z: segB.z - segA.z }
             const wallLen = Math.hypot(wallVec.x, wallVec.z)
             if (wallLen === 0) return
 
@@ -386,29 +472,46 @@ export function EnhancedFloorplannerCanvas() {
             }
 
             // Move both endpoints of the wall
-            const aIndex = pts.findIndex((pt) => Math.abs(pt.x - seg.a[0]) < 1e-6 && Math.abs(pt.z - seg.a[1]) < 1e-6)
-            const bIndex = pts.findIndex((pt) => Math.abs(pt.x - seg.b[0]) < 1e-6 && Math.abs(pt.z - seg.b[1]) < 1e-6)
-
-            if (aIndex !== -1) {
+            if (dragShapeIndex === -1) {
+              const seg = segs[dragWallIndex]
+              const aIndex = pts.findIndex((pt) => Math.abs(pt.x - seg.a[0]) < 1e-6 && Math.abs(pt.z - seg.a[1]) < 1e-6)
+              const bIndex = pts.findIndex((pt) => Math.abs(pt.x - seg.b[0]) < 1e-6 && Math.abs(pt.z - seg.b[1]) < 1e-6)
+              if (aIndex !== -1) {
+                const newA = {
+                  x: dragStartPoints[aIndex].x + constrainedDelta.x,
+                  z: dragStartPoints[aIndex].z + constrainedDelta.z,
+                }
+                movePoint(aIndex, [newA.x, newA.z])
+              }
+              if (bIndex !== -1) {
+                const newB = {
+                  x: dragStartPoints[bIndex].x + constrainedDelta.x,
+                  z: dragStartPoints[bIndex].z + constrainedDelta.z,
+                }
+                movePoint(bIndex, [newB.x, newB.z])
+              }
+            } else if (dragShapeIndex !== null) {
+              const shape = shapes[dragShapeIndex]
+              if (!shape) return
+              const aIdx = dragWallIndex
+              const bIdx = (dragWallIndex + 1) % shape.length
               const newA = {
-                x: dragStartPoints[aIndex].x + constrainedDelta.x,
-                z: dragStartPoints[aIndex].z + constrainedDelta.z,
+                x: dragStartShapePoints[aIdx].x + constrainedDelta.x,
+                z: dragStartShapePoints[aIdx].z + constrainedDelta.z,
               }
-              movePoint(aIndex, [newA.x, newA.z])
-            }
-
-            if (bIndex !== -1) {
               const newB = {
-                x: dragStartPoints[bIndex].x + constrainedDelta.x,
-                z: dragStartPoints[bIndex].z + constrainedDelta.z,
+                x: dragStartShapePoints[bIdx].x + constrainedDelta.x,
+                z: dragStartShapePoints[bIdx].z + constrainedDelta.z,
               }
-              movePoint(bIndex, [newB.x, newB.z])
+              movePointInShape(dragShapeIndex, aIdx, [newA.x, newA.z])
+              movePointInShape(dragShapeIndex, bIdx, [newB.x, newB.z])
             }
           }
 
           if (mode === "MOVE" && !dragMode) {
             const hit = findHitTarget(p)
             setHoverWallIndex(hit?.type === "WALL" ? hit.index : null)
+            setHoverShapeIndex(hit ? (hit as any).shapeIndex ?? null : null)
           }
         }}
         onPointerDown={(e) => {
@@ -423,10 +526,7 @@ export function EnhancedFloorplannerCanvas() {
           }
 
           if (mode === "DRAW") {
-            if (pts.length >= 3 && Math.hypot(p.x - pts[0].x, p.z - pts[0].z) < 0.25) {
-              closeLoop()
-              return
-            }
+            if (pts.length >= 4) return
             addPoint([p.x, p.z])
             return
           }
@@ -437,18 +537,24 @@ export function EnhancedFloorplannerCanvas() {
             if (hit?.type === "CORNER") {
               setDragMode("CORNER")
               setDragIndex(hit.index)
-              setDragStartPoints([...pts])
+              const sIdx = (hit as any).shapeIndex ?? null
+              setDragShapeIndex(sIdx)
+              if (sIdx === -1) setDragStartPoints([...pts])
+              else if (sIdx !== null && sIdx >= 0) setDragStartShapePoints([...(shapes[sIdx] ?? [])])
             } else if (hit?.type === "WALL") {
               setDragMode("WALL")
               setDragWallIndex(hit.index)
+              const sIdx = (hit as any).shapeIndex ?? null
+              setDragShapeIndex(sIdx)
               setDragOffset(p)
-              setDragStartPoints([...pts])
+              if (sIdx === -1) setDragStartPoints([...pts])
+              else if (sIdx !== null && sIdx >= 0) setDragStartShapePoints([...(shapes[sIdx] ?? [])])
             }
           }
 
           if (mode === "DELETE") {
             const hit = findHitTarget(p)
-            if (hit?.type === "CORNER") {
+            if (hit?.type === "CORNER" && (hit as any).shapeIndex === -1) {
               deletePoint(hit.index)
             }
           }
@@ -461,6 +567,8 @@ export function EnhancedFloorplannerCanvas() {
           setDragIndex(null)
           setDragWallIndex(null)
           setDragStartPoints([])
+          setDragStartShapePoints([])
+          setDragShapeIndex(null)
         }}
         onPointerCancel={(e) => {
           try {
@@ -470,6 +578,8 @@ export function EnhancedFloorplannerCanvas() {
           setDragIndex(null)
           setDragWallIndex(null)
           setDragStartPoints([])
+          setDragStartShapePoints([])
+          setDragShapeIndex(null)
         }}
       />
 
@@ -483,7 +593,11 @@ export function EnhancedFloorplannerCanvas() {
         </div>
         <div className="flex items-center gap-2">
           <span className="font-medium">Points:</span>
-          <span>{pts.length}</span>
+          <span>{pts.length} (current)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">Shapes:</span>
+          <span>{shapes.length}</span>
         </div>
         {isShiftPressed && <div className="text-blue-600 text-xs mt-1">Grid Snap: ON</div>}
         <div className="text-xs text-gray-500 mt-1">ESC: Cancel • Shift: Grid Snap</div>

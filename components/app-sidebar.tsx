@@ -73,11 +73,11 @@ export function AppSidebar() {
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
           <SidebarGroupLabel>Catalog</SidebarGroupLabel>
           <SidebarGroupContent>
-            {tab === "shop" ? (
+            {tab === "shop" || tab === "design" ? (
               <ItemsPanel />
             ) : (
               <div className="text-xs text-muted-foreground px-2 py-1">
-                Switch to "Add Items" to browse catalog.
+                Switch to "Design" or "Add Items" to add furniture.
               </div>
             )}
           </SidebarGroupContent>

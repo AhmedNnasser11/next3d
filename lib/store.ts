@@ -31,6 +31,7 @@ type State = {
 
   fpPoints: Pt[]
   fpSegments: { a: [number, number]; b: [number, number] }[]
+  fpShapes: Pt[][]
 
   _orbitControls: any | null
   _objects: Record<string, THREE.Object3D>
@@ -56,6 +57,8 @@ type Actions = {
   fpDeletePoint: (index: number) => void
   fpCloseLoop: () => void
   fpClear: () => void
+  fpCommitCurrentShape: () => void
+  fpMovePointInShape: (shapeIndex: number, pointIndex: number, p: [number, number]) => void
   buildFromFloorplan: () => void
   ensureItemsInside: () => void
   addDefaultDecor: () => void
@@ -161,14 +164,11 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
 
     roomCenter: [cx, 0, cz],
 
-    fpPoints: DEFAULT_POLY.map(([x, z]) => ({ x, z })).concat([{ x: DEFAULT_POLY[0][0], z: DEFAULT_POLY[0][1] }]),
-    fpSegments: DEFAULT_POLY.map((p, i) => ({
-      a: [p[0], p[1]] as [number, number],
-      b: [DEFAULT_POLY[(i + 1) % DEFAULT_POLY.length][0], DEFAULT_POLY[(i + 1) % DEFAULT_POLY.length][1]] as [
-        number,
-        number,
-      ],
-    })),
+    // Current in-progress shape (0..4 points) and its segments
+    fpPoints: [],
+    fpSegments: [],
+    // Committed 4-corner shapes
+    fpShapes: [DEFAULT_POLY.map(([x, z]) => ({ x, z }))],
 
     _orbitControls: null,
     _objects: {},
@@ -227,14 +227,9 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
         floorPolygon: DEFAULT_POLY,
         walls: computeWallsFromPolygon(DEFAULT_POLY),
         roomCenter: [cx, 0, cz],
-        fpPoints: DEFAULT_POLY.map(([x, z]) => ({ x, z })).concat([{ x: DEFAULT_POLY[0][0], z: DEFAULT_POLY[0][1] }]),
-        fpSegments: DEFAULT_POLY.map((p, i) => ({
-          a: [p[0], p[1]] as [number, number],
-          b: [DEFAULT_POLY[(i + 1) % DEFAULT_POLY.length][0], DEFAULT_POLY[(i + 1) % DEFAULT_POLY.length][1]] as [
-            number,
-            number,
-          ],
-        })),
+        fpPoints: [],
+        fpSegments: [],
+        fpShapes: [DEFAULT_POLY.map(([x, z]) => ({ x, z }))],
       }),
 
     serialize: () => {
@@ -308,12 +303,17 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
 
     fpAddPoint: ([x, z]) =>
       set((s) => {
+        if (s.fpPoints.length >= 4) return {}
         const pts = [...s.fpPoints, { x, z }]
         let segs = s.fpSegments
         if (pts.length >= 2) {
           const a = pts[pts.length - 2]
           const b = pts[pts.length - 1]
           segs = [...segs, { a: [a.x, a.z], b: [b.x, b.z] }]
+        }
+        // Auto-commit when reaching 4 points
+        if (pts.length === 4) {
+          return { fpPoints: [], fpSegments: [], fpShapes: [...s.fpShapes, pts] }
         }
         return { fpPoints: pts, fpSegments: segs }
       }),
@@ -344,26 +344,36 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
       }),
     fpCloseLoop: () =>
       set((s) => {
-        if (s.fpPoints.length < 3) return {}
+        if (s.fpPoints.length !== 4) return {}
         const pts = s.fpPoints.slice()
-        pts.push({ ...pts[0] })
-        const segs = pts
-          .slice(0, -1)
-          .map((p, i) => ({ a: [p.x, p.z] as [number, number], b: [pts[i + 1].x, pts[i + 1].z] as [number, number] }))
-        return { fpPoints: pts, fpSegments: segs }
+        return { fpPoints: [], fpSegments: [], fpShapes: [...s.fpShapes, pts] }
       }),
-    fpClear: () => set({ fpPoints: [], fpSegments: [] }),
+    fpClear: () => set({ fpPoints: [], fpSegments: [], fpShapes: [] }),
+    fpCommitCurrentShape: () =>
+      set((s) => {
+        if (s.fpPoints.length !== 4) return {}
+        const pts = s.fpPoints.slice()
+        return { fpPoints: [], fpSegments: [], fpShapes: [...s.fpShapes, pts] }
+      }),
+    fpMovePointInShape: (shapeIndex, pointIndex, [x, z]) =>
+      set((s) => {
+        if (shapeIndex < 0 || shapeIndex >= s.fpShapes.length) return {}
+        const shapes = s.fpShapes.map((sh, si) =>
+          si === shapeIndex ? sh.map((p, pi) => (pi === pointIndex ? { x, z } : p)) : sh,
+        )
+        return { fpShapes: shapes }
+      }),
 
     buildFromFloorplan: () => {
-      const { fpPoints } = get()
-      if (fpPoints.length < 4) return
-      const pts = fpPoints.slice()
-      if (pts.length >= 2) {
-        const last = pts[pts.length - 1]
-        const first = pts[0]
-        if (Math.hypot(last.x - first.x, last.z - first.z) < 1e-6) pts.pop()
+      const { fpShapes, fpPoints } = get()
+      let polygon: [number, number][] = []
+      if (fpShapes.length > 0) {
+        polygon = fpShapes[fpShapes.length - 1].map((p) => [p.x, p.z])
+      } else if (fpPoints.length === 4) {
+        polygon = fpPoints.map((p) => [p.x, p.z])
+      } else {
+        return
       }
-      const polygon: [number, number][] = pts.map((p) => [p.x, p.z])
       const walls = computeWallsFromPolygon(polygon)
       const [cx2, cz2] = polygonCentroid(polygon)
       set({ floorPolygon: polygon, walls, roomCenter: [cx2, 0, cz2] })
