@@ -29,6 +29,11 @@ type State = {
   floorTexOn: boolean
   roomCenter: [number, number, number]
 
+  // Ceiling properties
+  ceilingVisible: boolean
+  ceilingColor: string
+  ceilingTexOn: boolean
+
   fpPoints: Pt[]
   fpSegments: { a: [number, number]; b: [number, number] }[]
 
@@ -51,6 +56,10 @@ type Actions = {
   setItemTransform: (id: string, t: Partial<Pick<PlacedItem, "position" | "rotation" | "scale">>) => void
   setFloorColor: (color: string) => void
   setFloorTexOn: (on: boolean) => void
+  setWallHeight: (height: number) => void
+  setCeilingVisible: (visible: boolean) => void
+  setCeilingColor: (color: string) => void
+  setCeilingTexOn: (on: boolean) => void
   fpAddPoint: (p: [number, number]) => void
   fpMovePoint: (index: number, p: [number, number]) => void
   fpDeletePoint: (index: number) => void
@@ -159,6 +168,11 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
     floorColor: "#dddde3",
     floorTexOn: true,
 
+    // Ceiling properties
+    ceilingVisible: true,
+    ceilingColor: "#f0f0f0",
+    ceilingTexOn: true,
+
     roomCenter: [cx, 0, cz],
 
     fpPoints: DEFAULT_POLY.map(([x, z]) => ({ x, z })).concat([{ x: DEFAULT_POLY[0][0], z: DEFAULT_POLY[0][1] }]),
@@ -227,6 +241,13 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
         floorPolygon: DEFAULT_POLY,
         walls: computeWallsFromPolygon(DEFAULT_POLY),
         roomCenter: [cx, 0, cz],
+        wallHeight: 2.6,
+        wallThickness: 0.12,
+        floorColor: "#dddde3",
+        floorTexOn: true,
+        ceilingVisible: true,
+        ceilingColor: "#f0f0f0",
+        ceilingTexOn: true,
         fpPoints: DEFAULT_POLY.map(([x, z]) => ({ x, z })).concat([{ x: DEFAULT_POLY[0][0], z: DEFAULT_POLY[0][1] }]),
         fpSegments: DEFAULT_POLY.map((p, i) => ({
           a: [p[0], p[1]] as [number, number],
@@ -249,6 +270,9 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
           wallThickness: state.wallThickness,
           floorColor: state.floorColor,
           floorTexOn: state.floorTexOn,
+          ceilingVisible: state.ceilingVisible,
+          ceilingColor: state.ceilingColor,
+          ceilingTexOn: state.ceilingTexOn,
         },
         null,
         2,
@@ -269,6 +293,9 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
           wallThickness: typeof obj.wallThickness === "number" ? obj.wallThickness : 0.12,
           floorColor: typeof obj.floorColor === "string" ? obj.floorColor : "#dddde3",
           floorTexOn: typeof obj.floorTexOn === "boolean" ? obj.floorTexOn : true,
+          ceilingVisible: typeof obj.ceilingVisible === "boolean" ? obj.ceilingVisible : true,
+          ceilingColor: typeof obj.ceilingColor === "string" ? obj.ceilingColor : "#f0f0f0",
+          ceilingTexOn: typeof obj.ceilingTexOn === "boolean" ? obj.ceilingTexOn : true,
         })
         const poly = get().floorPolygon
         const [cx2, cz2] = poly.length ? polygonCentroid(poly) : [0, 0]
@@ -305,6 +332,10 @@ export const usePlannerStore = create<State & Actions>((set, get) => {
 
     setFloorColor: (color) => set({ floorColor: color }),
     setFloorTexOn: (on) => set({ floorTexOn: on }),
+    setWallHeight: (height) => set({ wallHeight: height }),
+    setCeilingVisible: (visible) => set({ ceilingVisible: visible }),
+    setCeilingColor: (color) => set({ ceilingColor: color }),
+    setCeilingTexOn: (on) => set({ ceilingTexOn: on }),
 
     fpAddPoint: ([x, z]) =>
       set((s) => {

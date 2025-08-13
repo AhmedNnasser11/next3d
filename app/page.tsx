@@ -8,6 +8,7 @@ import { RoomCanvas } from "@/components/room-canvas"
 import { usePlannerStore } from "@/lib/store"
 import { TopBar } from "@/components/top-bar"
 import { EnhancedFloorplannerCanvas } from "@/components/floorplanner-canvas"
+import { TutorialOverlay } from "@/components/tutorial-overlay"
 
 export default function Page() {
   const tab = usePlannerStore((s) => s.tab)
@@ -30,6 +31,13 @@ export default function Page() {
           {tab === "floorplan" ? (
             <div className="w-full h-[calc(100vh-56px)]">
               <EnhancedFloorplannerCanvas />
+              <div className="absolute bottom-4 left-4 bg-white/80 backdrop-blur-sm p-2 rounded-md shadow-md text-sm">
+                <div className="text-xs font-medium mb-1">Floorplan Tools:</div>
+                <div className="text-xs">• Draw: Click to add points</div>
+                <div className="text-xs">• Move: Drag points</div>
+                <div className="text-xs">• Delete: Click on points to delete</div>
+                <div className="text-xs">• Shift: Snap to grid</div>
+              </div>
             </div>
           ) : (
             <div className="w-full h-[calc(100vh-56px)]">
@@ -39,6 +47,7 @@ export default function Page() {
           )}
         </main>
       </SidebarInset>
+      <TutorialOverlay />
     </SidebarProvider>
   )
 }

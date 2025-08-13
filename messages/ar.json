@@ -1,0 +1,10 @@
+{
+  "CeilingControls": {
+    "title": "Edit Ceiling",
+    "wallHeight": "Wall Height",
+    "showCeiling": "Show Ceiling",
+    "ceilingColor": "Ceiling Color",
+    "pickColor": "Pick Color",
+    "showTexture": "Show Texture"
+  }
+}

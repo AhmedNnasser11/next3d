@@ -18,12 +18,27 @@ function TooltipProvider({
   )
 }
 
-function Tooltip({
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
+interface TooltipProps extends React.ComponentProps<typeof TooltipPrimitive.Root> {
+  content?: React.ReactNode
+}
+
+function Tooltip({ content, children, ...props }: TooltipProps) {
+  const childCount = React.Children.count(children)
+  const isShorthand = !!content && childCount === 1
+
   return (
     <TooltipProvider>
-      <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+      <TooltipPrimitive.Root data-slot="tooltip" {...props}>
+        {isShorthand ? (
+          <>
+            <TooltipTrigger asChild>{children as React.ReactElement}</TooltipTrigger>
+            <TooltipContent>{content}</TooltipContent>
+          </>
+        ) : (
+          // Composition mode: children must include TooltipTrigger/TooltipContent as needed
+          <>{children}</>
+        )}
+      </TooltipPrimitive.Root>
     </TooltipProvider>
   )
 }

@@ -14,8 +14,9 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { usePlannerStore } from "@/lib/store";
-import { CuboidIcon as Cube, Ruler, ShoppingCart } from "lucide-react";
+import { CuboidIcon as Cube, Ruler, ShoppingCart, Home } from "lucide-react";
 import { ItemsPanel } from "@/components/items-panel";
+import { CeilingControls } from "@/components/ceiling-controls";
 
 export function AppSidebar() {
   const tab = usePlannerStore((s) => s.tab);
@@ -90,6 +91,15 @@ export function AppSidebar() {
             )}
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {tab === "design" && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Room Settings</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <CeilingControls />
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter />
     </Sidebar>

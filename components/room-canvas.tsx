@@ -15,6 +15,7 @@ import { TransformToolbar } from "@/components/transform-toolbar";
 import { FloorMesh } from "./floor";
 import { Walls } from "./walls";
 import { PlacedItem } from "./placed-item";
+import { CeilingMesh } from "./ceiling";
 
 function AutoHideFrontWall() {
   const { camera } = useThree();
@@ -146,6 +147,7 @@ export function RoomCanvas() {
 
           <FloorMesh />
           <Walls />
+          <CeilingMesh />
           <AutoHideFrontWall />
 
           {items.map((it) => (
